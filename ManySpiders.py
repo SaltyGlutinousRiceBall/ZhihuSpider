@@ -6,6 +6,23 @@ import SpiderConfig
 import datetime
 import pymysql
 import ZhihuSQL
+import threading
+import math
+import copy
+
+threadlock = threading.Lock()
+
+class commentTHREAD(threading.Thread):
+    def __init__(self, ansID, ansorID, offset, count):
+        threading.Thread.__init__(self)
+        self.ansID= ansID
+        self.ansorID = ansorID
+        self.offset = offset
+        self.count = count
+
+    def run(self):
+        commentthread(self.ansID, self.ansorID, self.offset, self.count)
+
 
 def hastopic(search):
 
@@ -75,13 +92,18 @@ def childComentSpider(comment_id):
     db.close()
 
 
-def commentSpider(ans_id, ansor_id):
+def commentthread(ans_id, ansor_id, offset_yuanshi, count_yuanshi):
     url = SpiderConfig.url + SpiderConfig.url_api + r'/answers/' + str(ans_id) + r'/root_comments'
-    response = requests.get(url, params=SpiderConfig.CommentSpiderParam, headers=SpiderConfig.headers)
-    ans_json = json.loads(response.text)
+    param = copy.copy(SpiderConfig.CommentSpiderParam)
     db = ZhihuSQL.connect()
     cursor = db.cursor()
-    while True:
+    offset = copy.copy(offset_yuanshi)
+    count = copy.copy(count_yuanshi)
+
+    while count > 0:
+        param['offset'] = offset
+        response = requests.get(url, params=param, headers=SpiderConfig.headers)
+        ans_json = json.loads(response.text)
         for data in ans_json['data']:
             comment_id = data['id']  # 评论的id
             content = data['content']  # 评论的内容
@@ -99,6 +121,64 @@ def commentSpider(ans_id, ansor_id):
             content = pymysql.escape_string(content)
 
             sql_main = """INSERT INTO zhihu(user1_id, user2_id, ACT_TYPE, content_id, TIME)
+                                      values('%s','%s',4,'%s',str_to_date(\'%s\','%%Y-%%m-%%d %%H:%%i:%%s'))""" \
+                       % (author_id, ansor_id, 'answer' + str(ans_id), created_time_real)
+
+            sql_user = """INSERT INTO usertable(user_id,name) select '%s','%s' from dual where not
+                                                          exists(select 1 from usertable where user_id ='%s')""" \
+                       % (author_id, author_name, author_id)
+
+            sql_comment = """INSERT INTO commenttable(comment_id,answer_id,featured,vote_num,reply_num,content)
+                                         values('%s', '%s', '%s', %d, %d, '%s')""" \
+                          % ('comment' + str(comment_id), 'answer' + str(ans_id), featured, vote_count,
+                             child_comment_count, content)
+
+            threadlock.acquire()
+            cursor.execute(sql_main)
+            cursor.execute(sql_user)
+            cursor.execute(sql_comment)
+            db.commit()
+            threadlock.release()
+
+        count = count - 1
+        offset += 20
+
+        if ans_json['paging']['is_end']:
+            break
+
+        next_url = ans_json['paging']['next']
+        url = SpiderConfig.url + SpiderConfig.url_api + next_url[21:]  # 这里next给出的url没有带api/v4，需要添加上，不然无法请求成功
+
+    db.close()
+
+
+def commentSpider(ans_id, ansor_id):
+    url = SpiderConfig.url + SpiderConfig.url_api + r'/answers/' + str(ans_id) + r'/root_comments'
+    response = requests.get(url, params=SpiderConfig.CommentSpiderParam, headers=SpiderConfig.headers)
+    ans_json = json.loads(response.text)
+    db = ZhihuSQL.connect()
+    cursor = db.cursor()
+    count = 0
+
+    while True:
+        for data in ans_json['data']:
+            comment_id = data['id']  # 评论的id
+            content = data['content']  # 评论的内容
+            vote_count = data['vote_count']  # 点赞数量
+            created_time = data['created_time']  # 创建时间
+            featured = data['featured']  # 是否是热评
+            author_id = data['author']['member']['id']  # 撰写评论的用户的id
+            author_name = data['author']['member']['name']  # 撰写评论的用户的名称
+            child_comment_count = data['child_comment_count']  # 子评论的数量
+            created_time_array = datetime.datetime.utcfromtimestamp(created_time)  # 将时间戳转化为数组
+            created_time_real = created_time_array.strftime("%Y-%m-%d %H:%M:%S")  # 将时间数组转化为字符串的形式
+            author_name = pymysql.escape_string(author_name)
+            author_id = pymysql.escape_string(author_id)
+            ansor_id = pymysql.escape_string(ansor_id)
+            content = pymysql.escape_string(content)
+
+
+            sql_main = """INSERT INTO zhihu(user1_id, user2_id, ACT_TYPE, content_id, TIME)
                           values('%s','%s',4,'%s',str_to_date(\'%s\','%%Y-%%m-%%d %%H:%%i:%%s'))"""\
                        % (author_id, ansor_id, 'answer'+str(ans_id), created_time_real)
 
@@ -108,16 +188,17 @@ def commentSpider(ans_id, ansor_id):
 
             sql_comment = """INSERT INTO commenttable(comment_id,answer_id,featured,vote_num,reply_num,content)
                              values('%s', '%s', '%s', %d, %d, '%s')"""\
-                          % ('comment'+str(comment_id), 'comment'+str(ans_id), featured, vote_count,
+                          % ('comment'+str(comment_id), 'answer'+str(ans_id), featured, vote_count,
                              child_comment_count, content)
 
             cursor.execute(sql_main)
             cursor.execute(sql_user)
             cursor.execute(sql_comment)
+            count = count + 1
             db.commit()
 
-            if child_comment_count > 0:
-                childComentSpider(comment_id)
+            # if child_comment_count > 0:
+            #     childComentSpider(comment_id)
         if ans_json['paging']['is_end']:
             break
 
@@ -196,10 +277,56 @@ def AnswerSpider(url, quesor_id):
             cursor.execute(sql_maintable)
             cursor.execute(sql_user)
             cursor.execute(sql_ans)
+
             db.commit()
+            print(comment_count)
+
+            print("开始并行爬取" + str(datetime.datetime.now()))
+            threads = []
+
+            if comment_count < 201:
+                times = math.ceil(comment_count/20.0)
+                thread_num = times % 10
+                for i in range(0, 1, thread_num-1):
+                    offset = i*20
+                    thread = commentTHREAD(ans_id, author_id, offset, 1)
+                    threads.append(thread)
+                for i in threads:
+                    i.start()
+
+                for i in threads:
+                    i.join()
+            else:
+                times = math.ceil(comment_count/20.0)
+                thread_num = times % 10
+                count = math.floor(times / 10)
+                offset = 0
+                i = 10
+                while i > 0:
+                    if thread_num > 0:
+                        thread = commentTHREAD(ans_id, author_id, offset, count + 1)
+                        offset += 20*(count+1)
+                        thread_num = thread_num - 1
+                        i = i - 1
+                        threads.append(thread)
+                    else:
+                        thread = commentTHREAD(ans_id, author_id, offset, count)
+                        offset += 20*count
+                        i = i - 1
+                        threads.append(thread)
+                for i in threads:
+                    i.start()
+
+                for i in threads:
+                    i.join()
+
+            print("开始串行爬取" + str(datetime.datetime.now()))
 
             # voterSpider(ans_id, author_id)  # 爬取给该回答点赞的人
-            commentSpider(ans_id, author_id)  # 爬取该回复下的评论
+            # commentSpider(ans_id, author_id)  # 爬取该回复下的评论
+
+            # print("串并爬取结束" + str(datetime.datetime.now()))
+            print("")
 
         if ans_json['paging']['is_end']:
             break
