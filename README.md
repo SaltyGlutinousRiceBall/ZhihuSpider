@@ -8,18 +8,18 @@ PyMySQL  0.9.3
 requests  2.18.4  
 lxml  4.2.1
 
-##使用步骤  
-###1、首先要安装MySQL数据库  
+## 使用步骤  
+### 1、首先要安装MySQL数据库  
 [MySQL安装教程](https://www.runoob.com/mysql/mysql-install.html)  
-###2、然后安装依赖包
+### 2、然后安装依赖包
 因为已经生成了**requirements.txt**，只需要在项目的目录下，命令行下输入下面的代码:  
 
 >pip install -r requirements.txt
 
 **PS：**是在项目的目录下输入这句代码 
-###3、创建数据库  
+### 3、创建数据库  
 按照第一步的教程安装好数据库后，创建一个数据库，数据库的名称可以自己定  
-###4、修改文件SpiderConfig.py  
+### 4、修改文件SpiderConfig.py  
 SpiderConfig.py中有两个变量，一个是**User_Agent**，一个是**headers**
 ![headers](pic/User_Agent.png)  
 
@@ -39,14 +39,14 @@ SpiderConfig.py中有两个变量，一个是**User_Agent**，一个是**headers
 >test = 'Hello,' \ # 在换行的结尾处加上符号'\'  
 >&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;'World' 
 
-###5、修改ZhihuSQL.py  
+### 5、修改ZhihuSQL.py  
 **ZhihuSQL.py**内存有建立的表的结构形式，还有一个函数叫**connect()**,它的功能是连接目标数据库：
   
 ![connect](pic/connect.png)  
 
 按照注释将对应的变量修改为自己的数据库的信息即可  
 
-###6、打开Spider.py运行  
+### 6、打开Spider.py运行  
 在**Spider.py**第10行有个变量名叫keywords，那就是需要爬取的关键字,改成自己需要的关键字即可运行  
 运行方式：  
 * pycharm直接右键运行即可   
@@ -54,7 +54,7 @@ SpiderConfig.py中有两个变量，一个是**User_Agent**，一个是**headers
 >python Spider.py  
 
 运行即可  
-##代码结构  
+## 代码结构  
 
 
 - **Spider.py**&nbsp;&nbsp;程序的主文件,程序开始的地方  
@@ -67,14 +67,14 @@ SpiderConfig.py中有两个变量，一个是**User_Agent**，一个是**headers
    childCommenSpider()&nbsp;&nbsp; 爬取评论的所有回复信息
 - **SpiderConfig**&nbsp;&nbsp; 存放着爬虫的一些参数信息，一般情况下除了**User_Agent**和**headers**，其它的不用修改  
 - **ZhihuSQL.py**&nbsp;&nbsp; &nbsp;&nbsp;存放着连接到数据库的函数以及建库的SQL语句，一般只需要修改连接函数  
-##运行结果查看
-###1.可以使用数据库可视化工具，如MySQL官方开发的[MySQL Workbench](https://dev.mysql.com/downloads/workbench/)，打开软件后，连接到数据库，连接成功后界面如下图：  
+## 运行结果查看
+### 1.可以使用数据库可视化工具，如MySQL官方开发的[MySQL Workbench](https://dev.mysql.com/downloads/workbench/)，打开软件后，连接到数据库，连接成功后界面如下图：  
 ![database](pic/databasse.png)
 
 左边框起来的一列就是你的数据库,选择你想查看的数据库下的表,右键选择**Select Rows limit 1000**，结果就显示出来了，如下图：   
 
 ![result](pic/result.png)  
-###2.在命令行输入命令查看结果
+### 2.在命令行输入命令查看结果
 首先连接至数据库，使用use命令选择需要使用的数据库：  
 >use 数据库名  
 
